@@ -2,8 +2,7 @@ var fs = require('fs');
 var through = require('through');
 var rework = require('rework');
 
-module.exports = function(b, opts) {
-
+module.exports = function(w, opts) {
   // validate opts
   if (!opts.out) {
     throw new Error(
@@ -12,10 +11,17 @@ module.exports = function(b, opts) {
   }
 
   // declare state
-  var modules;
+  var modules = {};
 
-  // configure browserify
-  b.transform(function(filename) {
+  // "bundle end" hook
+  w.on('end', function() {
+    var css = fs.createWriteStream(opts.out);
+    for (var name in modules) {
+      css.write(modules[name]);
+    }
+  });
+
+  w.transform(function(filename) {
     if (!/\.css$/.exec(filename)) return through();
 
     var buffer = '';
@@ -43,28 +49,6 @@ module.exports = function(b, opts) {
         this.queue(null);
       });
   });
-
-  // "bundle start" hook
-  function onBundleStart(bundleOpts) {
-    modules = {};
-  }
-
-  // "bundle end" hook
-  function onBundleEnd() {
-    var css = fs.createWriteStream(opts.out);
-    for (var name in modules) {
-      css.write(modules[name]);
-    }
-    modules = {};
-  }
-
-  // override bundle to enable lifecycle hooks
-  var bundle = b.bundle;
-
-  b.bundle = function(bundleOpts) {
-    onBundleStart(bundleOpts);
-    return bundle.apply(b, arguments).on('end', onBundleEnd);
-  }
 }
 
 function classNameToName(className) {
